@@ -24,6 +24,8 @@ Set `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SESSION_ID`, and `API_TOKEN` in
 
 Auto-reply responds only to private chats when `wa_settings.auto_reply` is
 enabled. View-once media is not forwarded or copied.
+When Baileys emits a new `connection.update` QR, the service stores the QR for
+`GET /qr` and renders a scannable terminal QR with `qrcode-terminal`.
 
 ## Deploy on Suga with Docker
 

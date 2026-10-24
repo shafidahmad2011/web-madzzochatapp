@@ -1,24 +1,37 @@
+'use client';
+
+import { FormEvent, useState } from 'react';
+import { Icon } from './Icon';
+
 type ComposeProps = {
-  value: string;
-  onChange: (value: string) => void;
-  onSend: () => void;
+  onSend: (message: string) => void;
 };
 
-export function Compose({ value, onChange, onSend }: ComposeProps) {
+export function Compose({ onSend }: ComposeProps) {
+  const [value, setValue] = useState('');
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!value.trim()) return;
+    onSend(value);
+    setValue('');
+  };
+
   return (
-    <div className="compose">
-      <div className="compose-box">
-        <button className="icon-btn" aria-label="attach">📎</button>
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Ketik pesan..."
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onSend();
-          }}
-        />
-        <button className="primary-btn" onClick={onSend}>Kirim</button>
-      </div>
-    </div>
+    <form className="compose" onSubmit={submit}>
+      <button className="attach-button" type="button" aria-label="Lampirkan file">
+        <Icon name="add" />
+      </button>
+      <input
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="Write something thoughtful..."
+        aria-label="Tulis pesan"
+      />
+      <span className="compose-hint">↵ to send</span>
+      <button className="send-button" type="submit" disabled={!value.trim()} aria-label="Kirim pesan">
+        <Icon name="send" size={17} />
+      </button>
+    </form>
   );
 }

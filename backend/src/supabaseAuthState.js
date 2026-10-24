@@ -1,4 +1,4 @@
-import { BufferJSON, initAuthCreds } from '@whiskeysystems/baileys';
+import { BufferJSON, initAuthCreds } from '@whiskeysockets/baileys';
 import { loadSession, saveSession } from './supabase.js';
 
 const sessionId = process.env.SESSION_ID || 'default-session';

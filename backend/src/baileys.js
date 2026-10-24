@@ -1,8 +1,9 @@
 import makeWASocket, {
   DisconnectReason
-} from '@whiskeysystems/baileys';
+} from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
+import qrcodeTerminal from 'qrcode-terminal';
 import { getSettings } from './supabase.js';
 import { useSupabaseAuthState } from './supabaseAuthState.js';
 
@@ -55,7 +56,10 @@ export async function connectToWhatsApp() {
     sock.ev.on('connection.update', (update) => {
       const { connection, qr, lastDisconnect } = update;
 
-      if (qr) global.qrCode = qr;
+      if (qr) {
+        global.qrCode = qr;
+        qrcodeTerminal.generate(qr, { small: true });
+      }
       if (connection === 'open') global.qrCode = null;
 
       if (connection === 'close') {

@@ -1,17 +1,24 @@
 type ChatBubbleProps = {
   incoming: boolean;
-  text?: string;
-  image?: string;
+  text: string;
   time: string;
+  sender: string;
+  index: number;
 };
 
-export function ChatBubble({ incoming, text, image, time }: ChatBubbleProps) {
+export function ChatBubble({ incoming, text, time, sender, index }: ChatBubbleProps) {
   return (
-    <div className={`message-row ${incoming ? 'incoming' : 'outgoing'}`}>
-      <div className={`message-bubble ${image ? 'media' : ''}`}>
-        {image ? <img src={image} alt="media content" className="message-image" /> : <p>{text}</p>}
-        <time>{time}</time>
+    <article
+      className={`message-row ${incoming ? 'incoming' : 'outgoing'}`}
+      style={{ animationDelay: `${Math.min(index * 55, 300)}ms` }}
+    >
+      <div className="message-stack">
+        <span className="message-sender">{sender}</span>
+        <div className="message-bubble">
+          <p>{text}</p>
+          <time>{time}</time>
+        </div>
       </div>
-    </div>
+    </article>
   );
 }
