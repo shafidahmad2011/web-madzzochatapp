@@ -12,11 +12,16 @@ create table if not exists public.wa_settings (
   id smallint primary key default 1 check (id = 1),
   auto_rvo boolean not null default false,
   auto_reply boolean not null default false,
-  auto_reply_message text not null default 'Halo! Saya sedang menggunakan MadzzoChatApp.'
+  auto_reply_message text not null default 'Halo! Saya sedang menggunakan MadzzoChatApp.',
+  self_jid text
 );
+
+alter table public.wa_settings
+  add column if not exists self_jid text;
 
 create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
+  wa_message_id text unique,
   from_jid text not null,
   to_jid text,
   body text,
@@ -24,6 +29,9 @@ create table if not exists public.messages (
   timestamp timestamptz not null default now(),
   is_view_once boolean not null default false
 );
+
+alter table public.messages
+  add column if not exists wa_message_id text unique;
 
 alter table public.wa_sessions enable row level security;
 alter table public.wa_settings enable row level security;
@@ -50,6 +58,10 @@ create policy "Backend service role access to messages"
 
 create index if not exists wa_sessions_session_id_idx on public.wa_sessions (session_id);
 create index if not exists messages_timestamp_idx on public.messages (timestamp desc);
+create index if not exists messages_incoming_thread_idx
+  on public.messages (to_jid, from_jid, timestamp desc);
+create index if not exists messages_outgoing_thread_idx
+  on public.messages (from_jid, to_jid, timestamp desc);
 
 insert into public.wa_settings default values
 on conflict (id) do nothing;

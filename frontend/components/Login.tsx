@@ -2,13 +2,24 @@ import { FormEvent } from 'react';
 import { Icon } from './Icon';
 
 type LoginProps = {
-  pin: string;
+  email: string;
+  password: string;
   error: string;
-  onPinChange: (value: string) => void;
+  loading: boolean;
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
   onSubmit: () => void;
 };
 
-export function Login({ pin, error, onPinChange, onSubmit }: LoginProps) {
+export function Login({
+  email,
+  password,
+  error,
+  loading,
+  onEmailChange,
+  onPasswordChange,
+  onSubmit,
+}: LoginProps) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSubmit();
@@ -37,28 +48,40 @@ export function Login({ pin, error, onPinChange, onSubmit }: LoginProps) {
         <div className="login-form-wrap">
           <p className="eyebrow">WELCOME BACK</p>
           <h2>Unlock your desk.</h2>
-          <p className="login-hint">Enter your access PIN to continue to your inbox.</p>
+          <p className="login-hint">Sign in with your authorized account to continue.</p>
           <form onSubmit={handleSubmit}>
-            <label className="underline-field" htmlFor="access-pin">
-              <span>ACCESS PIN</span>
+            <label className="underline-field" htmlFor="email">
+              <span>EMAIL</span>
               <input
-                id="access-pin"
+                id="email"
+                type="email"
+                inputMode="email"
+                autoComplete="username"
+                value={email}
+                onChange={(event) => onEmailChange(event.target.value)}
+                placeholder="you@example.com"
+                required
+              />
+            </label>
+            <label className="underline-field" htmlFor="password">
+              <span>PASSWORD</span>
+              <input
+                id="password"
                 type="password"
-                inputMode="numeric"
                 autoComplete="current-password"
-                value={pin}
-                onChange={(event) => onPinChange(event.target.value)}
-                placeholder="••••"
-                autoFocus
+                value={password}
+                onChange={(event) => onPasswordChange(event.target.value)}
+                placeholder="Your password"
+                required
               />
             </label>
             {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="login-submit" type="submit">
-              <span>Enter workspace</span>
+            <button className="login-submit" type="submit" disabled={loading}>
+              <span>{loading ? 'Signing in…' : 'Enter workspace'}</span>
               <Icon name="arrow" />
             </button>
           </form>
-          <p className="demo-note">Local preview access code <code>1234</code></p>
+          <p className="demo-note">Access is limited to accounts authorized by the workspace owner.</p>
         </div>
         <span className="login-side-note">ENCRYPTED SESSION <i /> PRIVATE BY DESIGN</span>
       </section>

@@ -11,6 +11,8 @@ type ChatAreaProps = {
   connected: boolean;
   onSend: (message: string) => void;
   onOpenSettings: () => void;
+  messagesLoading: boolean;
+  error: string;
 };
 
 export function ChatArea({
@@ -19,6 +21,8 @@ export function ChatArea({
   connected,
   onSend,
   onOpenSettings,
+  messagesLoading,
+  error,
 }: ChatAreaProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -37,8 +41,8 @@ export function ChatArea({
         <div className="contact-details">
           <h1 className="contact-name">{chat.name}</h1>
           <span className="contact-status">
-            <i className={`status-dot ${connected && chat.online ? 'is-online' : ''}`} />
-            {connected && chat.online ? 'Available now' : 'Last seen recently'}
+            <i className={`status-dot ${connected ? 'is-online' : ''}`} />
+            {connected ? 'WhatsApp service connected' : 'WhatsApp service disconnected'}
           </span>
         </div>
         <div className="header-actions">
@@ -66,13 +70,18 @@ export function ChatArea({
       </header>
 
       <div className="chat-context">
-        <span>FRIDAY, 24 MAY</span>
+        <span>{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}</span>
         <span className="context-line" />
-        <span>5 MESSAGES</span>
+        <span>{messages.length} MESSAGES</span>
       </div>
+      {error && <div className="empty-search" role="alert">{error}</div>}
 
       <div className="messages" aria-live="polite">
-        {visibleMessages.length ? visibleMessages.map((message, index) => (
+        {messagesLoading ? (
+          <div className="message-loading" role="status">Loading conversation…</div>
+        ) : !chat.jid ? (
+          <div className="empty-search">No conversations yet. Messages will appear here when they arrive.</div>
+        ) : visibleMessages.length ? visibleMessages.map((message, index) => (
           <ChatBubble
             key={message.id}
             incoming={message.incoming}
@@ -81,12 +90,12 @@ export function ChatArea({
             index={index}
             sender={message.incoming ? chat.name : 'You'}
           />
-        )) : (
+        )) : query ? (
           <div className="empty-search">No messages match “{query}”.</div>
-        )}
+        ) : <div className="empty-search">No messages in this conversation yet.</div>}
       </div>
       <div className="composer-divider"><span>YOU ARE CAUGHT UP</span></div>
-      <Compose onSend={onSend} />
+      <Compose onSend={onSend} disabled={!chat.jid || !connected} />
     </section>
   );
 }

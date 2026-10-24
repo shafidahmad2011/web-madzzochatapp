@@ -21,7 +21,7 @@ export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 export async function getSettings() {
   const { data, error } = await supabase
     .from('wa_settings')
-    .select('auto_rvo, auto_reply, auto_reply_message')
+    .select('auto_rvo, auto_reply, auto_reply_message, self_jid')
     .order('id', { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -31,8 +31,16 @@ export async function getSettings() {
   return data || {
     auto_rvo: false,
     auto_reply: false,
-    auto_reply_message: 'Halo! Saya sedang menggunakan MadzzoChatApp.'
+    auto_reply_message: 'Halo! Saya sedang menggunakan MadzzoChatApp.',
+    self_jid: null
   };
+}
+
+export async function saveSelfJid(selfJid) {
+  const { error } = await supabase
+    .from('wa_settings')
+    .upsert({ id: 1, self_jid: selfJid }, { onConflict: 'id' });
+  if (error) throw error;
 }
 
 export async function saveSettings(settings) {
@@ -49,11 +57,48 @@ export async function saveSettings(settings) {
     ? supabase.from('wa_settings').update(settings).eq('id', current.id)
     : supabase.from('wa_settings').insert(settings);
   const { data, error } = await query
-    .select('auto_rvo, auto_reply, auto_reply_message')
+    .select('auto_rvo, auto_reply, auto_reply_message, self_jid')
     .single();
 
   if (error) throw error;
   return data;
+}
+
+export async function getMessagesForContact(contactJid, selfJid, limit = 200) {
+  const [incoming, outgoing] = await Promise.all([
+    supabase
+      .from('messages')
+      .select('id, wa_message_id, from_jid, to_jid, body, media_type, timestamp, is_view_once')
+      .eq('from_jid', contactJid)
+      .eq('to_jid', selfJid)
+      .order('timestamp', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('messages')
+      .select('id, wa_message_id, from_jid, to_jid, body, media_type, timestamp, is_view_once')
+      .eq('from_jid', selfJid)
+      .eq('to_jid', contactJid)
+      .order('timestamp', { ascending: false })
+      .limit(limit)
+  ]);
+
+  if (incoming.error) throw incoming.error;
+  if (outgoing.error) throw outgoing.error;
+
+  return [...(incoming.data || []), ...(outgoing.data || [])]
+    .sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime())
+    .slice(-limit);
+}
+
+export async function getRecentMessages(limit = 500) {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('id, wa_message_id, from_jid, to_jid, body, media_type, timestamp')
+    .order('timestamp', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data || [];
 }
 
 export async function saveSession(sessionId, creds, keys) {
@@ -90,6 +135,12 @@ export async function clearSession(sessionId) {
 }
 
 export async function saveMessage(message) {
-  const { error } = await supabase.from('messages').insert(message);
+  const { data, error } = await supabase
+    .from('messages')
+    .insert(message)
+    .select('id, wa_message_id, from_jid, to_jid, body, media_type, timestamp, is_view_once')
+    .single();
+
   if (error) throw error;
+  return data;
 }

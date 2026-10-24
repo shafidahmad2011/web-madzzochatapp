@@ -150,6 +150,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .underline-field input:focus { border-color: var(--blue); outline: 0; }
 .underline-field input::placeholder { color: #52637b; }
+.underline-field input[type="email"] { font-size: 15px; letter-spacing: 0; }
+.underline-field + .underline-field { margin-top: 22px; }
 .form-error { color: var(--danger); font-size: 12px; }
 .login-submit {
   display: flex;
@@ -165,6 +167,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   transition: background 160ms ease, transform 160ms ease;
 }
 .login-submit:hover { transform: translateY(-1px); background: #587a99; }
+.login-submit:disabled, .save-button:disabled { cursor: wait; opacity: .65; }
 .demo-note { margin-top: 26px; color: var(--faint); font-size: 11px; }
 .demo-note code { margin-left: 7px; color: #b8c8dd; letter-spacing: .1em; }
 .login-side-note { position: absolute; right: 32px; bottom: 30px; display: flex; align-items: center; gap: 9px; }

@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 
 export type ChatItem = {
   id: string;
+  jid: string;
   name: string;
   preview: string;
   time: string;

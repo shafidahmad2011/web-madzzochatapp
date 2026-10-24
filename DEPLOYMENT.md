@@ -35,6 +35,19 @@ container files. The service reconnects after unexpected WhatsApp disconnects.
 `/health` and `/status` are public. `/qr`, `/send`, and `/settings` require the
 API token.
 
+## 2. Frontend on Vercel
+
+1. Set the Vercel project Root Directory to `frontend`.
+2. Configure `NEXT_PUBLIC_SUPABASE_URL` and
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` using the project's public Supabase values.
+3. Configure server-only `BAILEYS_SERVICE_URL` with the public Suga service URL
+   and `BAILEYS_API_TOKEN` with the same value as backend `API_TOKEN`.
+4. Set `BACKEND_ACCESS_EMAILS` to a comma-separated allowlist of Supabase Auth
+   email addresses. Create those accounts in Supabase Auth and disable public
+   sign-up unless it is intentionally needed.
+5. Deploy, sign in, then open `/connect-wa` and scan the QR. The browser never
+   receives the backend API token.
+
 ## 3. Availability monitoring
 
 No self-ping or Vercel Cron is configured for this service. Check Suga's

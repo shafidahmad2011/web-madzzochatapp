@@ -17,8 +17,10 @@ Set `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SESSION_ID`, and `API_TOKEN` in
 ## API
 
 - `GET /health` — public health check.
-- `GET /status` — public WhatsApp connection state.
+- `GET /status` — public connection boolean; does not expose the account number.
 - `GET /qr` — QR data for account linking; requires `Authorization: Bearer <API_TOKEN>`.
+- `POST /connect` and `POST /disconnect` — start/end a WhatsApp session; require API token.
+- `GET /messages/recent` and `GET /messages?jid=<contact-jid>` — load stored chats; require API token.
 - `POST /send` — send JSON `{ "to": "<jid>", "text": "..." }`; requires API token.
 - `GET /settings` and `POST /settings` — read/update auto-reply settings; require API token.
 
@@ -26,6 +28,12 @@ Auto-reply responds only to private chats when `wa_settings.auto_reply` is
 enabled. View-once media is not forwarded or copied.
 When Baileys emits a new `connection.update` QR, the service stores the QR for
 `GET /qr` and renders a scannable terminal QR with `qrcode-terminal`.
+
+The frontend API proxy validates the Supabase Auth session and the
+`BACKEND_ACCESS_EMAILS` allowlist before forwarding requests. Configure
+`BAILEYS_API_TOKEN` and `BACKEND_ACCESS_EMAILS` on the frontend host; keep
+`API_TOKEN` and `SUPABASE_SERVICE_KEY` server-side only. View-once media is
+not forwarded or copied.
 
 ## Deploy on Suga with Docker
 

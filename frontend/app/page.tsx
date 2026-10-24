@@ -1,90 +1,329 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChatArea } from '@/components/ChatArea';
 import { Icon } from '@/components/Icon';
 import { Login } from '@/components/Login';
 import { Settings } from '@/components/Settings';
 import { Sidebar, type ChatItem } from '@/components/Sidebar';
-import type { ChatMessage } from '@/components/types';
+import type { ChatMessage, StoredMessage } from '@/components/types';
+import { backendRequest } from '@/lib/backendApi';
+import { supabase } from '@/lib/supabase';
 
-const initialChats: ChatItem[] = [
-  { id: '1', name: 'Madinah', preview: 'Kirim bukti harga terbaru ya', time: '09:20', unread: 2, initials: 'MA', color: 'sand', online: true },
-  { id: '2', name: 'Support Team', preview: 'Terima kasih, kami sudah review', time: 'Kemarin', unread: 0, initials: 'ST', color: 'blue', online: false },
-  { id: '3', name: 'Aulia', preview: 'Sudah siap jam 7 malam?', time: 'Sabtu', unread: 1, initials: 'AU', color: 'rose', online: true },
-  { id: '4', name: 'Marketing', preview: 'Proposal sudah saya kirim', time: 'Jumat', unread: 0, initials: 'MK', color: 'green', online: false },
-];
+type RecentMessagesResponse = { messages: StoredMessage[]; selfJid: string | null };
+type SettingsResponse = {
+  settings: { auto_rvo: boolean; auto_reply: boolean; auto_reply_message: string };
+};
+type StatusResponse = { connected: boolean };
 
-const initialMessages: ChatMessage[] = [
-  { id: 'm1', incoming: true, text: 'Halo, apakah masih ada slot untuk hari Jumat?', time: '09:12' },
-  { id: 'm2', incoming: false, text: 'Masih ada. Mau saya bantu amankan satu?', time: '09:13' },
-  { id: 'm3', incoming: true, text: 'Boleh, untuk dua orang ya.', time: '09:14' },
-  { id: 'm4', incoming: false, text: 'Siap. Saya kirim detailnya sebentar lagi.', time: '09:16' },
-  { id: 'm5', incoming: true, text: 'Makasih banyak!', time: '09:20' },
-];
+const emptyChat: ChatItem = {
+  id: '',
+  jid: '',
+  name: 'Your inbox',
+  preview: 'Your conversations will appear here',
+  time: '',
+  unread: 0,
+  initials: 'M',
+  color: 'blue',
+  online: false,
+};
+
+function chatName(jid: string) {
+  return jid.split('@')[0].split(':')[0];
+}
+
+function avatarStyle(jid: string) {
+  const styles = ['sand', 'blue', 'rose', 'green'];
+  const hash = [...jid].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return styles[hash % styles.length];
+}
+
+function displayTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+}
+
+function toChatMessage(message: StoredMessage, selfJid: string): ChatMessage {
+  return {
+    id: message.id,
+    incoming: message.from_jid !== selfJid,
+    text: message.body || (message.media_type ? 'Media message' : ''),
+    time: displayTime(message.timestamp),
+  };
+}
 
 export default function HomePage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [pin, setPin] = useState('');
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
-  const [chats, setChats] = useState(initialChats);
-  const [selectedChatId, setSelectedChatId] = useState(initialChats[0].id);
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [pageError, setPageError] = useState('');
+  const [chats, setChats] = useState<ChatItem[]>([]);
+  const [selectedChatId, setSelectedChatId] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [lightMode, setLightMode] = useState(false);
   const [autoRvo, setAutoRvo] = useState(false);
-  const [autoReply, setAutoReply] = useState(true);
-  const [autoReplyMessage, setAutoReplyMessage] = useState('Halo! Saya sedang aktif di MadzzoChatApp. Saya akan membalas pesanmu secepatnya.');
-  const [waConnected, setWaConnected] = useState(true);
-  const [loadingChats, setLoadingChats] = useState(true);
+  const [autoReply, setAutoReply] = useState(false);
+  const [autoReplyMessage, setAutoReplyMessage] = useState('');
+  const [waConnected, setWaConnected] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsNotice, setSettingsNotice] = useState('');
+  const [selfJid, setSelfJid] = useState('');
 
-  const selectedChat = chats.find((chat) => chat.id === selectedChatId) ?? chats[0];
+  const selectedChat = chats.find((chat) => chat.id === selectedChatId) ?? emptyChat;
 
-  useEffect(() => {
-    setIsLoggedIn(sessionStorage.getItem('madzzochatapp-user') === 'authenticated');
+  const loadRecentChats = useCallback(async () => {
+    const response = await backendRequest<RecentMessagesResponse>('messages/recent');
+    if (response.selfJid) setSelfJid(response.selfJid);
+    const knownSelfJid = response.selfJid || selfJid;
+    if (!knownSelfJid) {
+      setChats([]);
+      setSelectedChatId('');
+      return;
+    }
+
+    const latestByContact = new Map<string, StoredMessage>();
+    for (const message of response.messages) {
+      const contactJid = message.from_jid === knownSelfJid ? message.to_jid : message.from_jid;
+      if (!contactJid || contactJid === knownSelfJid || !contactJid.endsWith('@s.whatsapp.net')) continue;
+      if (!latestByContact.has(contactJid)) latestByContact.set(contactJid, message);
+    }
+
+    const nextChats = [...latestByContact.entries()].map(([jid, message]) => {
+      const name = chatName(jid);
+      return {
+        id: jid,
+        jid,
+        name,
+        preview: message.body || (message.media_type ? 'Media message' : 'Message'),
+        time: displayTime(message.timestamp),
+        unread: 0,
+        initials: name.slice(0, 2).toUpperCase(),
+        color: avatarStyle(jid),
+        online: false,
+      };
+    });
+    setChats(nextChats);
+    setSelectedChatId((current) =>
+      nextChats.some((chat) => chat.id === current) ? current : nextChats[0]?.id || '',
+    );
+  }, [selfJid]);
+
+  const loadSettings = useCallback(async () => {
+    const response = await backendRequest<SettingsResponse>('settings');
+    setAutoRvo(false);
+    setAutoReply(response.settings.auto_reply);
+    setAutoReplyMessage(response.settings.auto_reply_message);
+  }, []);
+
+  const loadStatus = useCallback(async () => {
+    const response = await backendRequest<StatusResponse>('status');
+    setWaConnected(response.connected);
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn) return;
-    setLoadingChats(true);
-    const timer = window.setTimeout(() => setLoadingChats(false), 650);
-    return () => window.clearTimeout(timer);
-  }, [isLoggedIn]);
+    let active = true;
+    const applySession = (user: { email?: string } | null) => {
+      if (active) setUserEmail(user?.email || null);
+    };
 
-  const handleLogin = () => {
-    if (pin.trim() === '1234') {
-      sessionStorage.setItem('madzzochatapp-user', 'authenticated');
-      setIsLoggedIn(true);
-      setLoginError('');
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) throw error;
+      applySession(data.session?.user || null);
+      if (active) setAuthLoading(false);
+    }).catch((error: unknown) => {
+      console.error('Failed to restore Supabase session:', error);
+      if (active) {
+        setLoginError('Gagal memeriksa sesi. Muat ulang halaman dan coba lagi.');
+        setAuthLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      applySession(session?.user || null);
+    });
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!userEmail) return;
+    let active = true;
+    setSettingsLoading(true);
+    setPageError('');
+    Promise.allSettled([loadRecentChats(), loadSettings(), loadStatus()]).then((results) => {
+      if (!active) return;
+      const failures = results.filter((result) => result.status === 'rejected');
+      if (failures.length) {
+        const firstError = failures[0];
+        setPageError(firstError.status === 'rejected'
+          ? `Backend belum siap: ${firstError.reason instanceof Error ? firstError.reason.message : 'Request gagal'}`
+          : '');
+        const settingsResult = results[1];
+        if (settingsResult.status === 'rejected') {
+          setSettingsNotice(settingsResult.reason instanceof Error
+            ? settingsResult.reason.message
+            : 'Could not load settings.');
+        }
+      }
+      setSettingsLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [userEmail, loadRecentChats, loadSettings, loadStatus]);
+
+  useEffect(() => {
+    if (!userEmail) return;
+    const timer = window.setInterval(() => {
+      void loadRecentChats().catch((error: unknown) => {
+        console.error('Failed to refresh conversations:', error);
+      });
+      void loadStatus().catch((error: unknown) => {
+        console.error('Failed to refresh WhatsApp status:', error);
+        setWaConnected(false);
+        setPageError(error instanceof Error ? error.message : 'Backend connection lost.');
+      });
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [userEmail, loadRecentChats, loadStatus]);
+
+  useEffect(() => {
+    if (!userEmail || !selectedChat.jid) {
+      setMessages([]);
+      setMessagesLoading(false);
       return;
     }
-    setLoginError('PIN tidak cocok. Coba lagi.');
+
+    let active = true;
+    let firstLoad = true;
+    const refreshMessages = async () => {
+      if (firstLoad) setMessagesLoading(true);
+      try {
+        const response = await backendRequest<{ messages: StoredMessage[] }>(
+          `messages?jid=${encodeURIComponent(selectedChat.jid)}`,
+        );
+        if (active) {
+          setMessages(response.messages.map((message) => toChatMessage(message, selfJid)));
+          setPageError('');
+        }
+      } catch (error) {
+        if (active && firstLoad) {
+          setPageError(error instanceof Error ? error.message : 'Gagal memuat percakapan.');
+        }
+      } finally {
+        firstLoad = false;
+        if (active) setMessagesLoading(false);
+      }
+    };
+    void refreshMessages();
+    const timer = window.setInterval(() => void refreshMessages(), 8000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [userEmail, selectedChat.jid, selfJid]);
+
+  const handleLogin = async () => {
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) setLoginError(error.message);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Sign-in failed.');
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
   const handleSelectChat = (id: string) => {
     setSelectedChatId(id);
-    setChats((current) => current.map((chat) => chat.id === id ? { ...chat, unread: 0 } : chat));
     setDrawerOpen(false);
     setSettingsOpen(false);
   };
 
-  const handleSend = (text: string) => {
-    const value = text.trim();
-    if (!value) return;
-    const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-    setMessages((current) => [...current, { id: crypto.randomUUID(), incoming: false, text: value, time: now }]);
-    setChats((current) => current.map((chat) => chat.id === selectedChatId ? { ...chat, preview: value, time: 'Sekarang' } : chat));
+  const handleSend = async (text: string) => {
+    setPageError('');
+    try {
+      const response = await backendRequest<{ message: StoredMessage }>('send', {
+        method: 'POST',
+        body: { to: selectedChat.jid, text: text.trim() },
+      });
+      setMessages((current) => [...current, toChatMessage(response.message, selfJid)]);
+      void loadRecentChats();
+    } catch (error) {
+      const messageSent = Boolean(
+        error && typeof error === 'object' && 'messageSent' in error && error.messageSent,
+      );
+      setPageError(error instanceof Error ? error.message : 'Gagal mengirim pesan.');
+      if (messageSent) void loadRecentChats();
+    }
   };
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('madzzochatapp-user');
-    setIsLoggedIn(false);
-    setPin('');
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) setLoginError(`Gagal keluar: ${error.message}`);
   };
 
-  if (!isLoggedIn) {
-    return <Login pin={pin} error={loginError} onPinChange={setPin} onSubmit={handleLogin} />;
+  const handleSettingsSave = async () => {
+    setSettingsSaving(true);
+    setSettingsNotice('');
+    try {
+      const response = await backendRequest<SettingsResponse>('settings', {
+        method: 'POST',
+        body: { auto_reply: autoReply, auto_reply_message: autoReplyMessage },
+      });
+      setAutoReply(response.settings.auto_reply);
+      setAutoReplyMessage(response.settings.auto_reply_message);
+      setSettingsNotice('Settings saved.');
+    } catch (error) {
+      setSettingsNotice(error instanceof Error ? error.message : 'Could not save settings.');
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleConnectionToggle = async () => {
+    if (!waConnected || !window.confirm('Keluar dari sesi WhatsApp sekarang?')) return;
+    try {
+      await backendRequest('disconnect', { method: 'POST', body: {} });
+      setWaConnected(false);
+      setSettingsNotice('WhatsApp disconnected.');
+    } catch (error) {
+      setSettingsNotice(error instanceof Error ? error.message : 'Could not disconnect WhatsApp.');
+    }
+  };
+
+  if (authLoading) {
+    return <main className="login-screen"><p className="message-loading" role="status">Checking your session…</p></main>;
+  }
+
+  if (!userEmail) {
+    return (
+      <Login
+        email={email}
+        password={password}
+        error={loginError}
+        loading={loginLoading}
+        onEmailChange={setEmail}
+        onPasswordChange={setPassword}
+        onSubmit={handleLogin}
+      />
+    );
   }
 
   return (
@@ -93,13 +332,13 @@ export default function HomePage() {
         <Sidebar
           chats={chats}
           selectedId={selectedChatId}
-          loading={loadingChats}
+          loading={settingsLoading}
           open={drawerOpen}
           onSelect={handleSelectChat}
           onClose={() => setDrawerOpen(false)}
           onThemeToggle={() => setLightMode((current) => !current)}
           lightMode={lightMode}
-          onLogout={handleLogout}
+          onLogout={() => void handleLogout()}
         />
 
         <section className="conversation-column">
@@ -120,25 +359,27 @@ export default function HomePage() {
           {settingsOpen ? (
             <Settings
               connected={waConnected}
-              autoRvo={autoRvo}
+              autoRvo={false}
               autoReply={autoReply}
               autoReplyMessage={autoReplyMessage}
-              onAutoRvoChange={setAutoRvo}
+              saving={settingsSaving}
+              notice={settingsNotice}
+              onAutoRvoChange={() => undefined}
               onAutoReplyChange={setAutoReply}
               onAutoReplyMessageChange={setAutoReplyMessage}
-              onConnectionToggle={() => {
-                if (waConnected && !window.confirm('Keluar dari sesi WhatsApp sekarang?')) return;
-                setWaConnected((current) => !current);
-              }}
+              onSave={() => void handleSettingsSave()}
+              onConnectionToggle={() => void handleConnectionToggle()}
               onClose={() => setSettingsOpen(false)}
             />
           ) : (
             <ChatArea
               chat={selectedChat}
               messages={messages}
-              onSend={handleSend}
+              onSend={(text) => void handleSend(text)}
               onOpenSettings={() => setSettingsOpen(true)}
               connected={waConnected}
+              messagesLoading={messagesLoading}
+              error={pageError}
             />
           )}
         </section>
