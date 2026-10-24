@@ -1,4 +1,4 @@
-# Baileys service on Zeabur
+# Baileys service on Suga
 
 This Node.js/Express service connects to WhatsApp with Baileys and stores its
 authentication credentials and keys in Supabase. It does not persist session
@@ -25,21 +25,34 @@ Set `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SESSION_ID`, and `API_TOKEN` in
 Auto-reply responds only to private chats when `wa_settings.auto_reply` is
 enabled. View-once media is not forwarded or copied.
 
-## Deploy on Zeabur
+## Deploy on Suga with Docker
 
-1. Deploy the source repository through Zeabur.
-2. Set the service's root/working directory to `backend` for this monorepo.
-3. Zeabur detects the Node project from `package.json`; `npm start` runs
-   `node src/index.js`.
-4. Set `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SESSION_ID`, and `API_TOKEN` in
-   the service's environment variables.
+1. Sign in to Suga with GitHub and create a new project.
+2. Connect the GitHub repository containing this service.
+3. Select the `backend` directory as the service/build context and use its
+   `Dockerfile`.
+4. Add `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SESSION_ID`, and `API_TOKEN`
+   to the service environment. Do not commit `.env` or expose the service-role
+   key in frontend variables.
 5. Run `supabase/schema.sql` in Supabase before launching the service.
-6. Call `/qr` with the bearer API token and scan the returned QR.
+6. Deploy and open `/qr` with the bearer API token to get the QR data; scan it
+   with WhatsApp.
 
-The server binds to Zeabur's `PORT` environment variable. Credentials and keys
-are restored from Supabase after restarts. A Vercel Cron or external monitor
-can request `/health` if the service sleeps, but neither is an uptime
-guarantee.
+The Docker image uses Node 18 Alpine, installs dependencies, and starts with
+`npm start`. The application listens on `process.env.PORT` (default `3000` for
+local use); `EXPOSE 3000` in Docker is image metadata, not a replacement for
+the platform's runtime port configuration. Verify Suga's current port and
+container requirements in its service settings.
+
+No application keep-alive loop is configured. If the service is expected to
+remain continuously available, confirm Suga's current sleep and restart
+behavior for your plan. Use UptimeRobot as an availability monitor, not as an
+uptime guarantee:
+
+1. Create an HTTP(s) monitor at [UptimeRobot](https://uptimerobot.com/).
+2. Monitor `https://<your-service-domain>/health` using GET.
+3. Choose an interval allowed by your UptimeRobot plan.
+4. Confirm the monitor receives HTTP 200 with `{ "status": "ok" }`.
 
 Baileys is unofficial and WhatsApp may restrict accounts using it. Use it
 responsibly.

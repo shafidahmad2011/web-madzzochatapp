@@ -4,62 +4,49 @@
 
 1. Create a Supabase project.
 2. Run `supabase/schema.sql` in the SQL editor.
-3. Keep the Supabase service-role key only in the Zeabur backend environment.
-   Never expose it through a `NEXT_PUBLIC_` variable.
-4. The schema enables RLS and restricts access to the backend service role.
+3. Store the Supabase service-role key only in the backend service's
+   environment. Never expose it through a `NEXT_PUBLIC_` variable.
+4. The schema enables RLS and grants backend access to the service role.
 
-## 2. Baileys service on Zeabur
+## 2. Baileys service on Suga
 
-1. Push the project to GitHub and sign in to Zeabur with GitHub.
-2. Create a project, select **Add New Service → Deploy your source code**, and
-   choose the repository.
-3. This is a monorepo. Set the service's working/root directory to `backend`
-   if Zeabur does not select it automatically.
-4. Zeabur should detect Node.js from `backend/package.json`. Its existing
-   `"start": "node src/index.js"` script starts the service. No custom start
-   command or `zbpack.json` should be needed.
-5. Add these environment variables to the backend service:
+1. Sign in to Suga with GitHub and create a project.
+2. Connect the GitHub repository that contains this app.
+3. Set the Docker build context/root directory to `backend` so the platform
+   finds `backend/Dockerfile` and `backend/package.json`.
+4. Build and run the Docker image. The Dockerfile uses Node 18 Alpine,
+   installs dependencies, copies the backend source, and runs `npm start`
+   (`node src/index.js`).
+5. Set these backend environment variables in Suga:
    - `SUPABASE_URL` — Supabase project URL.
-   - `SUPABASE_SERVICE_KEY` — Supabase service-role key.
-   - `SESSION_ID` — stable ID used to load/store the WhatsApp session.
+   - `SUPABASE_SERVICE_KEY` — Supabase service-role key; keep private.
+   - `SESSION_ID` — stable identifier for the WhatsApp session.
    - `API_TOKEN` — long random token required by `/qr`, `/send`, and
      `/settings`.
-6. Deploy. Use the public service URL to check `/health` and `/status`. Fetch
-   `/qr` with the `Authorization: Bearer <API_TOKEN>` header, then scan the
-   returned QR using WhatsApp.
+6. Deploy. The service reads the runtime `PORT` and binds on `0.0.0.0`.
+   `EXPOSE 3000` in the Dockerfile is metadata; follow Suga's current
+   instructions for configuring the container port if its dashboard requests
+   one.
+7. Check `https://<your-service-domain>/health`. Fetch `/qr` with
+   `Authorization: Bearer <API_TOKEN>` and scan the returned QR with WhatsApp.
 
-The app listens on `process.env.PORT` (with a local development fallback),
-stores Baileys credentials and signal keys in Supabase rather than local files,
-and attempts to reconnect after an unexpected WhatsApp disconnect. `/health`
-and `/status` are public; `/qr`, `/send`, and `/settings` require the API token.
+Baileys credentials and signal keys are persisted in Supabase, not local
+container files. The service reconnects after unexpected WhatsApp disconnects.
+`/health` and `/status` are public. `/qr`, `/send`, and `/settings` require the
+API token.
 
-## 3. Keep-alive
+## 3. Availability monitoring
 
-Zeabur service sleep behavior depends on the plan and service configuration.
-An incoming health request may wake an idle service, but cold starts can
-interrupt the WhatsApp connection. Keep-alive is best-effort, not an uptime
-guarantee.
+No self-ping or Vercel Cron is configured for this service. Check Suga's
+current plan and service settings for sleep, restart, and availability
+behavior; verify any no-sleep claim with Suga's current documentation.
 
-### Vercel Cron
-
-Deploy `frontend/` to Vercel with its Root Directory set to `frontend`. Under
-**Project Settings → Environment Variables**, add:
-
-- `ZEABUR_SERVICE_URL` — the public Zeabur domain, without `/health`.
-- `CRON_SECRET` — a strong random value for authenticating the cron request.
-
-`frontend/vercel.json` schedules `/api/keep-alive` every 10 minutes. The API
-route checks `Authorization: Bearer <CRON_SECRET>` and requests the service's
-public `/health` endpoint. Verify invocations in Vercel **Cron Jobs** and
-**Logs**. Cron availability and minimum interval depend on the Vercel plan:
-check the dashboard to confirm that a 10-minute schedule is allowed.
-
-### UptimeRobot backup
-
-1. Sign up at [UptimeRobot](https://uptimerobot.com/).
-2. Add an HTTP(s) monitor for `https://<your-service-domain>/health`.
-3. Choose an interval supported by your monitor plan, such as 5 minutes if
-   available.
+For monitoring, configure an HTTP(s) monitor in
+[UptimeRobot](https://uptimerobot.com/) for
+`https://<your-service-domain>/health` with GET. Choose a polling interval
+available on your UptimeRobot plan. The health endpoint should return HTTP 200
+and `{ "status": "ok" }`. Monitoring reports availability; it does not itself
+guarantee continuous uptime.
 
 ## 4. WhatsApp note
 
