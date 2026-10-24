@@ -34,7 +34,10 @@ function chatName(jid: string) {
 
 function avatarStyle(jid: string) {
   const styles = ['sand', 'blue', 'rose', 'green'];
-  const hash = [...jid].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  let hash = 0;
+  for (let index = 0; index < jid.length; index += 1) {
+    hash += jid.charCodeAt(index);
+  }
   return styles[hash % styles.length];
 }
 
