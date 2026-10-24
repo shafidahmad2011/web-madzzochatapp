@@ -15,17 +15,17 @@ export async function GET(request: Request) {
     );
   }
 
-  const renderServiceUrl = process.env.RENDER_SERVICE_URL;
+  const zeaburServiceUrl = process.env.ZEABUR_SERVICE_URL;
 
-  if (!renderServiceUrl) {
+  if (!zeaburServiceUrl) {
     return NextResponse.json(
-      { ok: false, error: "RENDER_SERVICE_URL is not configured" },
+      { ok: false, error: "ZEABUR_SERVICE_URL is not configured" },
       { status: 500 },
     );
   }
 
   try {
-    const healthUrl = `${renderServiceUrl.replace(/\/+$/, "")}/health`;
+    const healthUrl = `${zeaburServiceUrl.replace(/\/+$/, "")}/health`;
     const response = await fetch(healthUrl, {
       cache: "no-store",
       signal: AbortSignal.timeout(10000),
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Render service returned HTTP ${response.status}`,
+          error: `Zeabur service returned HTTP ${response.status}`,
         },
         { status: 502 },
       );
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, status: 200 });
   } catch {
     return NextResponse.json(
-      { ok: false, error: "Failed to reach the Render service" },
+      { ok: false, error: "Failed to reach the Zeabur service" },
       { status: 502 },
     );
   }

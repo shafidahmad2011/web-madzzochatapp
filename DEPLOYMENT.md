@@ -4,61 +4,64 @@
 
 1. Create a Supabase project.
 2. Run `supabase/schema.sql` in the SQL editor.
-3. Keep the Supabase service-role key only in Render's server-side environment
-   variables. Do not expose it through a `NEXT_PUBLIC_` variable.
-4. The schema enables RLS and restricts the tables to the backend service role.
+3. Keep the Supabase service-role key only in the Zeabur backend environment.
+   Never expose it through a `NEXT_PUBLIC_` variable.
+4. The schema enables RLS and restricts access to the backend service role.
 
-## 2. Baileys service on Render
+## 2. Baileys service on Zeabur
 
-1. Create a Render **Web Service** connected to this repository.
-2. Set the service's **Root Directory** to `backend`.
-3. Set **Build Command** to `npm install` and **Start Command** to `npm start`.
-4. Add environment variables:
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_KEY`
-   - `SESSION_ID`
-   - `API_TOKEN` (a long random token for QR, send, and settings API endpoints)
-   - `RENDER_EXTERNAL_URL` (the service's public Render URL)
-5. After deployment, open `/qr` and scan the code to link WhatsApp.
+1. Push the project to GitHub and sign in to Zeabur with GitHub.
+2. Create a project, select **Add New Service → Deploy your source code**, and
+   choose the repository.
+3. This is a monorepo. Set the service's working/root directory to `backend`
+   if Zeabur does not select it automatically.
+4. Zeabur should detect Node.js from `backend/package.json`. Its existing
+   `"start": "node src/index.js"` script starts the service. No custom start
+   command or `zbpack.json` should be needed.
+5. Add these environment variables to the backend service:
+   - `SUPABASE_URL` — Supabase project URL.
+   - `SUPABASE_SERVICE_KEY` — Supabase service-role key.
+   - `SESSION_ID` — stable ID used to load/store the WhatsApp session.
+   - `API_TOKEN` — long random token required by `/qr`, `/send`, and
+     `/settings`.
+6. Deploy. Use the public service URL to check `/health` and `/status`. Fetch
+   `/qr` with the `Authorization: Bearer <API_TOKEN>` header, then scan the
+   returned QR using WhatsApp.
 
-The service uses Supabase for credentials and keys; Render's local filesystem
-is not used for session persistence. It automatically reconnects when the
-WhatsApp connection closes and exposes `/health`, `/status`, `/qr`, and `/send`.
-`/qr`, `/send`, and `/settings` require `Authorization: Bearer <API_TOKEN>`.
-Auto-reply is controlled by `wa_settings.auto_reply`.
-The schema keeps `auto_rvo` disabled for compatibility; the API rejects
-enabling it and does not forward view-once media.
+The app listens on `process.env.PORT` (with a local development fallback),
+stores Baileys credentials and signal keys in Supabase rather than local files,
+and attempts to reconnect after an unexpected WhatsApp disconnect. `/health`
+and `/status` are public; `/qr`, `/send`, and `/settings` require the API token.
 
-## 3. Vercel keep-alive request
+## 3. Keep-alive
 
-Deploy `frontend/` to Vercel (set it as the project Root Directory). Under
+Zeabur service sleep behavior depends on the plan and service configuration.
+An incoming health request may wake an idle service, but cold starts can
+interrupt the WhatsApp connection. Keep-alive is best-effort, not an uptime
+guarantee.
+
+### Vercel Cron
+
+Deploy `frontend/` to Vercel with its Root Directory set to `frontend`. Under
 **Project Settings → Environment Variables**, add:
 
-- `RENDER_SERVICE_URL` — the public Render URL, e.g.
-  `https://your-service.onrender.com`.
-- `CRON_SECRET` — generate a strong random secret yourself; Vercel uses it to
-  authenticate Cron requests when the variable is set. Set it for Production,
-  then redeploy.
+- `ZEABUR_SERVICE_URL` — the public Zeabur domain, without `/health`.
+- `CRON_SECRET` — a strong random value for authenticating the cron request.
 
-`frontend/vercel.json` schedules `/api/keep-alive` every 10 minutes. Check the
-project's **Cron Jobs** page and **Logs** for invocation results. A 401 usually
-means the secret is absent or mismatched; a 502 means the Render health request
-failed. Vercel Hobby may not permit a 10-minute schedule; verify current limits
-in the Vercel dashboard and adjust the schedule or plan if necessary.
+`frontend/vercel.json` schedules `/api/keep-alive` every 10 minutes. The API
+route checks `Authorization: Bearer <CRON_SECRET>` and requests the service's
+public `/health` endpoint. Verify invocations in Vercel **Cron Jobs** and
+**Logs**. Cron availability and minimum interval depend on the Vercel plan:
+check the dashboard to confirm that a 10-minute schedule is allowed.
 
-## 4. UptimeRobot backup monitor
+### UptimeRobot backup
 
-1. Create an account at [UptimeRobot](https://uptimerobot.com/).
-2. Add an HTTP(s) monitor for `https://your-service.onrender.com/health`.
-3. Choose a five-minute interval if it is available on your UptimeRobot plan.
+1. Sign up at [UptimeRobot](https://uptimerobot.com/).
+2. Add an HTTP(s) monitor for `https://<your-service-domain>/health`.
+3. Choose an interval supported by your monitor plan, such as 5 minutes if
+   available.
 
-An external monitor can wake a sleeping service when it makes a request, but
-neither this nor the in-process ping guarantees uninterrupted uptime on a free
-plan. Consult Render's current free-service limits before relying on the
-service for continuous connectivity.
+## 4. WhatsApp note
 
-## 5. Privacy and policy note
-
-Baileys is unofficial and may result in WhatsApp account restrictions. This
-service does not forward or copy view-once media; respect the sender's privacy
-and WhatsApp's terms.
+Baileys is unofficial and can lead to WhatsApp account restrictions. Use it
+responsibly. View-once media is not forwarded or copied by this service.

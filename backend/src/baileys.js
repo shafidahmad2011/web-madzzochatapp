@@ -1,6 +1,5 @@
 import makeWASocket, {
-  DisconnectReason,
-  Browsers
+  DisconnectReason
 } from '@whiskeysystems/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
@@ -40,7 +39,7 @@ export async function connectToWhatsApp() {
       auth: state,
       logger,
       printQRInTerminal: false,
-      browser: Browsers.ubuntu('MadzzoChatApp')
+      browser: ['MadzzoChatApp', 'Chrome', '1.0.0']
     });
 
     global.sock = sock;
